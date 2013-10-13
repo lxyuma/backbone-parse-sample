@@ -1,0 +1,139 @@
+<!doctype html>
+<head>
+  <meta charset="utf-8">
+
+  <title>My Parse App</title>
+  <meta name="description" content="My Parse App">
+  <meta name="viewport" content="width=device-width">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+  <script type="text/javascript" src="http://www.parsecdn.com/js/parse-1.2.12.min.js"></script>
+  <script type="text/javascript" src="http://underscorejs.org/underscore.js"></script>
+</head>
+
+<body>
+  
+  <div id="main">
+    <form id="todo-form">
+      <input type="text" id="title"/>
+      <input type="submit"/>
+      <a href="#help">[Help]</a>
+    </form>
+    <div id="error"></div>
+    <div id="todo-list">
+      <ul></ul>
+    </div>
+  </div>
+  <span class='help' style="display:none;">text入れて送信するだけね<a href='#'>戻る</a></span>
+  <script type="text/template" id="todo-template">
+    <strong>[TODO]</strong>
+    <span><%- title %></span>
+  </script>
+
+  <script type="text/javascript">
+    Parse.initialize("APPLICATION_ID", "JAVASCRIPT_KEY");
+    // Backbone.Model
+    var Todo = Parse.Object.extend({
+      className:"Todo",
+      validate: function(attrs){
+        if(_.isEmpty(attrs.title)){
+          return "please write text!";
+        }
+      }
+    });
+
+    // Backbone.Collection
+    var TodoList = Parse.Collection.extend({ model: Todo });
+
+    // Backbone.View
+    var TodoView = Parse.View.extend({
+      tagName: "li",
+      template: _.template($('#todo-template').html()),
+      render: function(){
+        this.$el.html(this.template(this.model.toJSON()));
+        return this;
+      }
+    });
+
+    var TodoListView = Parse.View.extend({
+      el: "#todo-list > ul",
+      initialize: function(){
+        this.collection.on("add", this.render, this);
+      },
+      render: function() {
+        this.$el.html("");
+        this.collection.each(function(todo) {
+          var todoView = new TodoView({model:todo});
+          this.$el.append(todoView.render().el);
+        },this);
+        return this;
+      }
+    });
+
+    var TodoFormView = Parse.View.extend({
+      el: "#todo-form",
+      events: {
+        "submit": "createTodo"
+      },
+      createTodo: function(e) {
+        e.preventDefault();
+        var todo = new Todo();
+        todo.on('error', function(model, error) {$('#error').html(error);});
+        todo.set({title : $('#title').val()})
+        if(todo.isValid()) {
+          $('#error').html('');
+          todo.save(null, {
+            success: _.bind(function(todo) {
+              this.collection.add(todo);
+              $('#title').val('');
+            }, this)
+          });
+        };
+      }
+    });
+
+    var AppView = Parse.View.extend({
+      initialize: function(){
+        new Parse.Query("Todo").find({
+          success: _.bind(function(list){
+            var todoList = new TodoList(list);
+            var todoFormView = new TodoFormView({collection: todoList});
+            this.todoListView =  new TodoListView({collection: todoList});
+            this.render();
+          }, this)
+        });
+      },
+      render: function(){
+        this.todoListView.render();
+        return this;
+      }
+    });
+
+    // Backbone.router
+    var TodoRouter = Parse.Router.extend({
+      initialize: function(){
+        var appView = new AppView();
+      },
+      routes: {
+        "help" : "help",
+        "" : "show"
+      },
+      help : function() {
+        $('#main').hide();
+        $("span.help").show();
+      },
+      show : function() {
+        $("span.help").hide();
+        $('#main').show();
+      }
+    });
+
+    var todoRouter = new TodoRouter;
+    Parse.history.start();
+
+
+  </script>
+</body>
+
+</html>
